@@ -1,7 +1,11 @@
  
-const WMS_BASE_URL = 'https://api.meteofrance.fr/pro/piaf/1.0/wms/MF-NWP-HIGHRES-PIAF-001-FRANCE-WMS'
+// const WMS_BASE_URL = 'https://api.meteofrance.fr/pro/piaf/1.0/wms/MF-NWP-HIGHRES-PIAF-001-FRANCE-WMS'
+// const MAP_BOUNDS = '37.5,-12,55.4,16'
+// const LAYER_NAME = 'TOTAL_PRECIPITATION_RATE__GROUND_OR_WATER_SURFACE'
+
+const WMS_BASE_URL = 'https://public-api.meteofrance.fr/public/aromepi/1.0/wms/MF-NWP-HIGHRES-AROMEPI-001-FRANCE-WMS'
 const MAP_BOUNDS = '37.5,-12,55.4,16'
-const LAYER_NAME = 'TOTAL_PRECIPITATION_RATE__GROUND_OR_WATER_SURFACE'
+const LAYER_NAME = 'PRECIPITATION_TYPE_15_MIN__GROUND_OR_WATER_SURFACE'
 
 export default async (request: Request): Promise<Response> => {
 
@@ -38,24 +42,13 @@ export default async (request: Request): Promise<Response> => {
   }
 
   try {
-    const frame = Math.max(0, Math.min(12, Number(new URL(request.url).searchParams.get('frame') ?? 6)))
-    const capabilitiesResponse = await fetch(`${WMS_BASE_URL}/GetCapabilities?service=WMS&version=1.3.0&request=GetCapabilities`, {
-      headers: { apikey: apiKey },
-    })
-    if (!capabilitiesResponse.ok) throw new Error(`GetCapabilities: ${capabilitiesResponse.status}`)
-
-    const capabilities = await capabilitiesResponse.text()
-    const layerBlock = capabilities.match(new RegExp(`<Layer>[\\s\\S]*?<Name>${LAYER_NAME}</Name>[\\s\\S]*?</Layer>`))?.[0] ?? ''
-    const times = [...layerBlock.matchAll(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z/g)].map((match) => match[0])
-    if (!times.length) throw new Error('Aucune échéance WMS disponible')
-
-    const center = times.length - 1
-    const time = times[Math.max(0, Math.min(times.length - 1, center - 6 + frame))]
+    const time = new URL(request.url).searchParams.get('time')
     const params = new URLSearchParams({
       service: 'WMS', version: '1.3.0', request: 'GetMap', layers: LAYER_NAME,
-      crs: 'EPSG:4326', format: 'image/png', bbox: MAP_BOUNDS, width: '1024', height: '700',
-      transparent: 'true', time,
+      crs: 'EPSG:4326', format: 'image/png', bbox: MAP_BOUNDS, height: '256', width: '256',
+      transparent: 'true',
     })
+    if (time) params.set('time', time)
     const imageResponse = await fetch(`${WMS_BASE_URL}/GetMap?${params}`, { headers: { apikey: apiKey } })
     return new Response(imageResponse.body, {
       status: imageResponse.status,

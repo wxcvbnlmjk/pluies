@@ -4,11 +4,64 @@ import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import './App.css'
 
+const timelineStep = 15 * 60 * 1000
+const timelineNow = new Date(Math.floor(Date.now() / timelineStep) * timelineStep)
 const timeline = Array.from({ length: 13 }, (_, index) => {
-  const time = new Date(Date.now() + (index - 6) * 10 * 60 * 1000)
-  return time.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+  return new Date(timelineNow.getTime() + (index - 6) * timelineStep)
 })
 const mapBounds: L.LatLngBoundsExpression = [[37.5, -12], [55.4, 16]]
+
+function recolorWmsImage(image: HTMLImageElement): string {
+  const canvas = document.createElement('canvas')
+  const width = image.naturalWidth || image.width
+  const height = image.naturalHeight || image.height
+  canvas.width = width
+  canvas.height = height
+
+  const context = canvas.getContext('2d')
+  if (!context) return image.src
+  return image.src 
+  // context.drawImage(image, 0, 0)
+  // const imageData = context.getImageData(0, 0, width, height)
+
+  // context.putImageData(imageData, 0, 0)
+  // return canvas.toDataURL('image/png')
+
+  // const { data } = imageData
+
+  // for (let index = 0; index < data.length; index += 4) {
+  //   const r = data[index]
+  //   const g = data[index + 1]
+  //   const b = data[index + 2]
+  //   const alpha = data[index + 3]
+
+  //   if (alpha === 0 || (r > 245 && g > 245 && b > 245)) {
+  //     data[index + 3] = 0
+  //     continue
+  //   }
+
+  //   const luminance = (r + g + b) / 765
+  //   let newColor: [number, number, number]
+
+  //   if (luminance < 0.2) {
+  //     newColor = [217, 247, 255]
+  //   } else if (luminance < 0.42) {
+  //     newColor = [29, 78, 216]
+  //   } else if (luminance < 0.72) {
+  //     newColor = [249, 115, 22]
+  //   } else {
+  //     newColor = [250, 204, 21]
+  //   }
+
+  //   data[index] = newColor[0]
+  //   data[index + 1] = newColor[1]
+  //   data[index + 2] = newColor[2]
+  //   data[index + 3] = alpha
+  // }
+
+  // context.putImageData(imageData, 0, 0)
+  // return canvas.toDataURL('image/png')
+}
 // const regions = [
 //   { name: 'Bretagne', latitude: 48.2, longitude: -3.1 }, { name: 'Île-de-France', latitude: 48.85, longitude: 2.35 },
 //   { name: 'Grand Est', latitude: 48.6, longitude: 5.2 }, { name: 'Nouvelle-Aquitaine', latitude: 45.2, longitude: -0.6 },
@@ -25,7 +78,9 @@ function App() {
   const [model, setModel] = useState('PIAF')
   const [wmsError, setWmsError] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(() => window.matchMedia('(min-width: 761px)').matches)
-  const currentTime = timeline[frame]
+  const currentDate = timeline[frame]
+  const currentWmsTime = currentDate.toISOString().replace('.000Z', 'Z')
+  const currentTime = currentDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
 
   useEffect(() => {
     if (!mapElement.current || mapRef.current) return undefined
@@ -62,17 +117,18 @@ function App() {
   useEffect(() => {
     const map = mapRef.current
     if (!map) return undefined
-    const url = `/api/meteo-wms?frame=${frame}`
+    const url = `/api/meteo-wms?time=${encodeURIComponent(currentWmsTime)}`
     setWmsError(false)
     const image = new Image()
     image.onload = () => {
       if (wmsLayerRef.current) wmsLayerRef.current.remove()
-      wmsLayerRef.current = L.imageOverlay(url, mapBounds, { opacity: 0.82, interactive: false }).addTo(map)
+      const recoloredUrl = recolorWmsImage(image)
+      wmsLayerRef.current = L.imageOverlay(recoloredUrl, mapBounds, { opacity: 0.82, interactive: false, className: 'wms-layer' }).addTo(map)
     }
     image.onerror = () => setWmsError(true)
     image.src = url
     return () => { image.onload = null; image.onerror = null }
-  }, [frame])
+  }, [currentDate])
 
   return <main className="app-shell">
     <header className="topbar">
@@ -82,7 +138,7 @@ function App() {
     <section className={`workspace ${sidebarOpen ? 'sidebar-is-open' : 'sidebar-is-closed'}`}><aside className="sidebar"><div className="sidebar-heading"><span>Prévisions</span><span className="muted-count">Mise à jour 18:57</span></div><div className="model-label">SOURCE ACTIVE</div><div className="source-select"><div className="source-icon"><Wind size={17} /></div><label htmlFor="model">Modèle météo</label><select id="model" value={model} onChange={(event) => setModel(event.target.value)}><option>PIAF</option><option>AROME</option><option>Radar France</option></select></div><div className="status-card"><div className="status-row"><span className="pulse-indicator" /><strong>Flux opérationnel</strong></div><p>Dernières données reçues il y a 3 min</p></div><div className="sidebar-section-title">REPÈRES</div><div className="place-row"><span className="place-pin pin-blue" /> France entière <span className="place-arrow">›</span></div><div className="place-row"><span className="place-pin pin-yellow" /> Ma position <span className="place-arrow">›</span></div><div className="sidebar-footer"><div className="legend-title">INTENSITÉ (MM/H)</div><div className="legend-bar" /><div className="legend-values"><span>0</span><span>2</span><span>5</span><span>10</span><span>20+</span></div></div></aside>
       <section className="map-stage"><div ref={mapElement} className="leaflet-map" aria-label="Carte géographique des précipitations" />{wmsError && <div className="wms-warning">Flux WMS indisponible</div>}<div className="map-controls"><button className="map-control" aria-label="Zoom avant" onClick={() => mapRef.current?.zoomIn()}><Plus size={17} /></button><button className="map-control" aria-label="Zoom arrière" onClick={() => mapRef.current?.zoomOut()}><Minus size={17} /></button><div className="control-rule" /><button className="map-control" aria-label="Recentrer la carte" onClick={() => mapRef.current?.fitBounds(mapBounds)}><LocateFixed size={16} /></button></div><div className="map-readout"><Crosshair size={14} /> Déplacez la carte pour explorer</div><div className="map-attribution">© Averse · Sources Météo-France · {model}</div>{selectedRegion && <div className="location-popover"><button className="popover-close" aria-label="Fermer" onClick={() => setSelectedRegion('')}><X size={15} /></button><div className="popover-kicker">PRÉVISION LOCALE</div><strong>{selectedRegion}</strong><div className="popover-weather"><span className="weather-dot" /> Pluie faible <b>1,8 mm/h</b></div><span className="popover-time">À {currentTime} · dans 10 min</span></div>}</section>
     </section>
-    <section className="timeline-panel"><div className="timeline-header"><div><span className="timeline-kicker">PRÉCIPITATIONS</span><h1>{currentTime}<span> · {frame <= 6 ? 'Observation' : 'Prévision'}</span></h1></div><button className="now-button" onClick={() => setFrame(6)}>Revenir à maintenant</button></div><div className="timeline-body"><button className={`play-button ${playing ? 'is-playing' : ''}`} aria-label={playing ? 'Mettre en pause' : 'Lancer l’animation'} onClick={() => setPlaying((value) => !value)}>{playing ? <Pause size={19} fill="currentColor" /> : <Play size={19} fill="currentColor" />}</button><div className="timeline-track-wrap"><div className="timeline-track"><div className="track-fill" style={{ width: `${(frame / (timeline.length - 1)) * 100}%` }} />{timeline.map((time, index) => <button key={`${time}-${index}`} className={`time-tick ${index === frame ? 'active' : ''}`} style={{ left: `${(index / (timeline.length - 1)) * 100}%` }} onClick={() => { setFrame(index); setPlaying(false) }}><span className="tick-mark" /><span className="tick-label">{time}</span></button>)}<input className="timeline-range" type="range" min="0" max={timeline.length - 1} value={frame} onChange={(event) => { setFrame(Number(event.target.value)); setPlaying(false) }} aria-label="Choisir l'heure" /></div></div></div></section>
+    <section className="timeline-panel"><div className="timeline-header"><div><span className="timeline-kicker">PRÉCIPITATIONS</span><h1>{currentTime}<span> · {frame <= 6 ? 'Observation' : 'Prévision'}</span></h1></div><button className="now-button" onClick={() => setFrame(6)}>Revenir à maintenant</button></div><div className="timeline-body"><button className={`play-button ${playing ? 'is-playing' : ''}`} aria-label={playing ? 'Mettre en pause' : 'Lancer l’animation'} onClick={() => setPlaying((value) => !value)}>{playing ? <Pause size={19} fill="currentColor" /> : <Play size={19} fill="currentColor" />}</button><div className="timeline-track-wrap"><div className="timeline-track"><div className="track-fill" style={{ width: `${(frame / (timeline.length - 1)) * 100}%` }} />{timeline.map((time, index) => <button key={`${time.toISOString()}-${index}`} className={`time-tick ${index === frame ? 'active' : ''}`} style={{ left: `${(index / (timeline.length - 1)) * 100}%` }} onClick={() => { setFrame(index); setPlaying(false) }}><span className="tick-mark" /><span className="tick-label">{time.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</span></button>)}<input className="timeline-range" type="range" min="0" max={timeline.length - 1} value={frame} onChange={(event) => { setFrame(Number(event.target.value)); setPlaying(false) }} aria-label="Choisir l'heure" /></div></div></div></section>
   </main>
 }
 

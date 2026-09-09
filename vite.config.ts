@@ -5,8 +5,9 @@ import { defineConfig, loadEnv } from 'vite'
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   const apiKey = env.METEO_FRANCE_API_KEY || process.env.METEO_FRANCE_API_KEY
-  const wmsBaseUrl = 'https://api.meteofrance.fr/pro/piaf/1.0/wms/MF-NWP-HIGHRES-PIAF-001-FRANCE-WMS'
-
+  const wmsBaseUrl = 'https://public-api.meteofrance.fr/public/aromepi/1.0/wms/MF-NWP-HIGHRES-AROMEPI-0025-FRANCE-WMS'
+// MF-NWP-HIGHRES-AROMEPI-001-FRANCE-WMS
+// MF-NWP-HIGHRES-AROMEPI-0025-FRANCE-WMS
   return {
     plugins: [react(), {
       name: 'meteo-france-wms',
@@ -19,15 +20,14 @@ export default defineConfig(({ mode }) => {
             return
           }
           try {
-            const requestedFrame = Math.max(0, Math.min(12, Number(new URL(request.url, 'http://localhost').searchParams.get('frame') ?? 6)))
-            const capabilities = await fetch(`${wmsBaseUrl}/GetCapabilities?service=WMS&version=1.3.0&request=GetCapabilities`, { headers: { apikey: apiKey } }).then((result) => result.text())
-            const layerBlock = capabilities.match(/<Layer>[\s\S]*?<Name>TOTAL_PRECIPITATION_RATE__GROUND_OR_WATER_SURFACE<\/Name>[\s\S]*?<\/Layer>/)?.[0] ?? ''
-            const times = [...layerBlock.matchAll(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z/g)].map((match) => match[0])
-            if (!times.length) throw new Error('Aucune échéance WMS disponible')
-            const center = times.length - 1
-            const time = times[Math.max(0, Math.min(times.length - 1, center - 6 + requestedFrame))]
-            const params = new URLSearchParams({ service: 'WMS', version: '1.3.0', request: 'GetMap', layers: 'TOTAL_PRECIPITATION_RATE__GROUND_OR_WATER_SURFACE', crs: 'EPSG:4326', format: 'image/png', bbox: '37.5,-12,55.4,16', width: '1024', height: '700', transparent: 'true', time })
+            const requestUrl = new URL(request.url ?? '/', 'http://localhost')
+           
+            const time =  requestUrl.searchParams.get('time')
+            const params = new URLSearchParams({ service: 'WMS', version: '1.3.0', layers: 'TOTAL_PRECIPITATION_RATE__GROUND_OR_WATER_SURFACE', crs: 'EPSG:4326', format: 'image/png', bbox: '37.5,-12,55.4,16', height: '256', width: '256', transparent: 'true' })
+            if (time) params.set('time', time)
+            
             const image = await fetch(`${wmsBaseUrl}/GetMap?${params}`, { headers: { apikey: apiKey } })
+            // console.log('WMS request params:', `${wmsBaseUrl}/GetMap?${params}`)
             response.statusCode = image.status
             response.setHeader('Content-Type', image.headers.get('content-type') ?? 'image/png')
             response.end(Buffer.from(await image.arrayBuffer()))
