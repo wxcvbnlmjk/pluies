@@ -23,19 +23,19 @@ export default async (request: Request): Promise<Response> => {
     process?: { env?: Record<string, string | undefined> }
   }).process?.env?.METEO_FRANCE_API_KEY_3  
  
-  const apiKey4 = (globalThis as typeof globalThis & {
-    process?: { env?: Record<string, string | undefined> }
-  }).process?.env?.METEO_FRANCE_API_KEY_4  
+  // const apiKey4 = (globalThis as typeof globalThis & {
+  //   process?: { env?: Record<string, string | undefined> }
+  // }).process?.env?.METEO_FRANCE_API_KEY_4  
  
-  const apiKey5 = (globalThis as typeof globalThis & {
-    process?: { env?: Record<string, string | undefined> }
-  }).process?.env?.METEO_FRANCE_API_KEY_5  
+  // const apiKey5 = (globalThis as typeof globalThis & {
+  //   process?: { env?: Record<string, string | undefined> }
+  // }).process?.env?.METEO_FRANCE_API_KEY_5  
  
-  const apiKey6 = (globalThis as typeof globalThis & {
-    process?: { env?: Record<string, string | undefined> }
-  }).process?.env?.METEO_FRANCE_API_KEY_6  
+  // const apiKey6 = (globalThis as typeof globalThis & {
+  //   process?: { env?: Record<string, string | undefined> }
+  // }).process?.env?.METEO_FRANCE_API_KEY_6  
  
-   const apiKey = [apiKey1, apiKey2, apiKey3, apiKey4, apiKey5, apiKey6].filter(
+   const apiKey = [apiKey1, apiKey2, apiKey3].filter(
      (key): key is string => key !== undefined,
    ).join('')
    
