@@ -5,7 +5,7 @@ import { defineConfig, loadEnv } from 'vite'
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   const apiKey = env.METEO_FRANCE_API_KEY || process.env.METEO_FRANCE_API_KEY
-  const wmsBaseUrl = 'https://public-api.meteofrance.fr/public/aromepi/1.0/wms/MF-NWP-HIGHRES-AROMEPI-0025-FRANCE-WMS'
+  const wmsBaseUrl = 'https://public-api.meteofrance.fr/public/aromepi/1.0/wms/MF-NWP-HIGHRES-AROMEPI-001-FRANCE-WMS'
 // MF-NWP-HIGHRES-AROMEPI-001-FRANCE-WMS
 // MF-NWP-HIGHRES-AROMEPI-0025-FRANCE-WMS
   return {
@@ -23,7 +23,7 @@ export default defineConfig(({ mode }) => {
             const requestUrl = new URL(request.url ?? '/', 'http://localhost')
            
             const time =  requestUrl.searchParams.get('time')
-            const params = new URLSearchParams({ service: 'WMS', version: '1.3.0', layers: 'TOTAL_PRECIPITATION_RATE__GROUND_OR_WATER_SURFACE', crs: 'EPSG:4326', format: 'image/png', bbox: '37.5,-12,55.4,16', height: '256', width: '256', transparent: 'true' })
+            const params = new URLSearchParams({ service: 'WMS', version: '1.3.0', request: 'GetMap', layers: 'TOTAL_PRECIPITATION_RATE__GROUND_OR_WATER_SURFACE', crs: 'EPSG:4326', format: 'image/png', bbox: '37.5,-12,55.4,16', height: '256', width: '256', transparent: 'true' })
             if (time) params.set('time', time)
             
             const image = await fetch(`${wmsBaseUrl}/GetMap?${params}`, { headers: { apikey: apiKey } })

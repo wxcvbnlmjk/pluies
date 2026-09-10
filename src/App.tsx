@@ -10,6 +10,17 @@ const timeline = Array.from({ length: 13 }, (_, index) => {
   return new Date(timelineNow.getTime() + (index - 6) * timelineStep)
 })
 const mapBounds: L.LatLngBoundsExpression = [[37.5, -12], [55.4, 16]]
+const wmsSouth = 37.5
+const wmsNorth = 55.4
+
+function latitudeToMercator(latitude: number): number {
+  const radians = latitude * Math.PI / 180
+  return Math.log(Math.tan(Math.PI / 4 + radians / 2))
+}
+
+function mercatorToLatitude(value: number): number {
+  return (2 * Math.atan(Math.exp(value)) - Math.PI / 2) * 180 / Math.PI
+}
 
 function recolorWmsImage(image: HTMLImageElement): string {
   const canvas = document.createElement('canvas')
@@ -20,47 +31,55 @@ function recolorWmsImage(image: HTMLImageElement): string {
 
   const context = canvas.getContext('2d')
   if (!context) return image.src
-  return image.src 
-  // context.drawImage(image, 0, 0)
-  // const imageData = context.getImageData(0, 0, width, height)
+  context.drawImage(image, 0, 0)
+  const sourceData = context.getImageData(0, 0, width, height)
+  const imageData = context.createImageData(width, height)
+  const sourceMercatorNorth = latitudeToMercator(wmsNorth)
+  const sourceMercatorSouth = latitudeToMercator(wmsSouth)
 
-  // context.putImageData(imageData, 0, 0)
-  // return canvas.toDataURL('image/png')
+  // Palette radar : faible intensité → cyan, intensité élevée → rose et jaune.
+  const palette: Array<[number, number, number]> = [
+    [91, 239, 255], [35, 145, 255], [107, 81, 255], [255, 62, 191], [255, 233, 55],
+  ]
 
-  // const { data } = imageData
+  for (let y = 0; y < height; y += 1) {
+    // Leaflet place l'image dans une carte Web Mercator. Pour chaque ligne de
+    // destination, on récupère donc la ligne équivalente dans l'image WMS 4326.
+    const mercator = sourceMercatorNorth + (sourceMercatorSouth - sourceMercatorNorth) * (y / (height - 1))
+    const latitude = mercatorToLatitude(mercator)
+    const sourceY = Math.max(0, Math.min(height - 1, Math.round((wmsNorth - latitude) / (wmsNorth - wmsSouth) * (height - 1))))
 
-  // for (let index = 0; index < data.length; index += 4) {
-  //   const r = data[index]
-  //   const g = data[index + 1]
-  //   const b = data[index + 2]
-  //   const alpha = data[index + 3]
+    for (let x = 0; x < width; x += 1) {
+      const sourceIndex = (sourceY * width + x) * 4
+      const index = (y * width + x) * 4
+      const r = sourceData.data[sourceIndex]
+      const g = sourceData.data[sourceIndex + 1]
+      const b = sourceData.data[sourceIndex + 2]
+      const alpha = sourceData.data[sourceIndex + 3]
 
-  //   if (alpha === 0 || (r > 245 && g > 245 && b > 245)) {
-  //     data[index + 3] = 0
-  //     continue
-  //   }
+      // Certaines réponses WMS renvoient un fond blanc malgré transparent=true.
+      if (alpha === 0 || (r > 245 && g > 245 && b > 245)) {
+        imageData.data[index + 3] = 0
+        continue
+      }
 
-  //   const luminance = (r + g + b) / 765
-  //   let newColor: [number, number, number]
+      const intensity = Math.max(0, Math.min(1, (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255))
+      const palettePosition = intensity * (palette.length - 1)
+      const lowerIndex = Math.floor(palettePosition)
+      const upperIndex = Math.min(lowerIndex + 1, palette.length - 1)
+      const blend = palettePosition - lowerIndex
+      const lower = palette[lowerIndex]
+      const upper = palette[upperIndex]
 
-  //   if (luminance < 0.2) {
-  //     newColor = [217, 247, 255]
-  //   } else if (luminance < 0.42) {
-  //     newColor = [29, 78, 216]
-  //   } else if (luminance < 0.72) {
-  //     newColor = [249, 115, 22]
-  //   } else {
-  //     newColor = [250, 204, 21]
-  //   }
+      imageData.data[index] = Math.round(lower[0] + (upper[0] - lower[0]) * blend)
+      imageData.data[index + 1] = Math.round(lower[1] + (upper[1] - lower[1]) * blend)
+      imageData.data[index + 2] = Math.round(lower[2] + (upper[2] - lower[2]) * blend)
+      imageData.data[index + 3] = alpha
+    }
+  }
 
-  //   data[index] = newColor[0]
-  //   data[index + 1] = newColor[1]
-  //   data[index + 2] = newColor[2]
-  //   data[index + 3] = alpha
-  // }
-
-  // context.putImageData(imageData, 0, 0)
-  // return canvas.toDataURL('image/png')
+  context.putImageData(imageData, 0, 0)
+  return canvas.toDataURL('image/png')
 }
 // const regions = [
 //   { name: 'Bretagne', latitude: 48.2, longitude: -3.1 }, { name: 'Île-de-France', latitude: 48.85, longitude: 2.35 },
